@@ -9,33 +9,38 @@ export const speakText = (text) => {
 };
 
 export async function analyzeImage(imageData) {
-  try {
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-    
-    const base64Data = imageData.split(',')[1];
-    
-    const result = await model.generateContent({
-      contents: [{
-        parts: [
-          { text: "Analyze this image and explain what you see." },
-          {
-            inline_data: {
-              mime_type: "image/jpeg",
-              data: base64Data
+    try {
+      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+      const base64Data = imageData.split(',')[1];
+      
+      const prompt = `Analyze this image:
+      If math problem: Provide step-by-step solution
+      If science question: Explain concept and answer
+      If language/text: Provide clear explanation
+      If general object: Describe key features and purpose
+      Format response with clear headers and steps`;
+  
+      const result = await model.generateContent({
+        contents: [{
+          parts: [
+            { text: prompt },
+            {
+              inline_data: {
+                mime_type: "image/jpeg",
+                data: base64Data
+              }
             }
-          }
-        ]
-      }]
-    });
-
-    const response = await result.response;
-    return response.text();
-  } catch (error) {
-    console.error("Error analyzing image:", error);
-    throw error;
+          ]
+        }]
+      });
+  
+      const response = await result.response;
+      return response.text();
+    } catch (error) {
+      console.error("Error analyzing image:", error);
+      throw error;
+    }
   }
-}
-
 export const captureAndProcess = async (videoRef, canvasRef, setIsProcessing, setError, setResult) => {
   if (!videoRef.current) return;
 
