@@ -1,70 +1,47 @@
-# Getting Started with Create React App
+# Visual Learning Assistant  
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+**Visual Learning Assistant** is an AI-powered application that enables users to solve problems and learn interactively. Simply point your camera at a problem or object, and the app provides narrated solutions in real-time.  
 
-## Available Scripts
+Built on the advanced **Gemini API**, this tool combines cutting-edge AI capabilities with a user-friendly interface, making it ideal for learners, professionals, and curious minds.  
 
-In the project directory, you can run:
+Live Demo: [Visual Learning Assistant](https://visual-learning-assistant.vercel.app/)  
 
-### `npm start`
+---
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
+## ✨ Features  
 
-The page will reload when you make changes.\
-You may also see any lint errors in the console.
+- **Instant Problem-Solving**: Analyze and solve problems in real-time by pointing your camera.  
+- **Powered by Gemini API**: Leverages advanced AI technology for accurate and context-aware responses.  
+- **Interactive Learning**: Narrated solutions combined with visuals for a comprehensive experience.  
+- **Versatile Use Cases**: Suitable for education, professional troubleshooting, and daily tasks.  
 
-### `npm test`
+---
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+## 🎯 Use Cases  
 
-### `npm run build`
+1. **Education**  
+   - Solve math problems, understand scientific concepts, and decode diagrams effortlessly.  
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+2. **Professional Support**  
+   - Analyze technical issues and simplify workflows with guided explanations.  
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+3. **Everyday Tasks**  
+   - Identify objects, translate signs, or explore unfamiliar topics with ease.  
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+---
 
-### `npm run eject`
+## 🚀 How It Works  
 
-**Note: this is a one-way operation. Once you `eject`, you can't go back!**
+1. **Launch the App**: Open the [Visual Learning Assistant](https://visual-learning-assistant.vercel.app/) on your device.  
+2. **Point Your Camera**: Focus on the problem, object, or text.  
+3. **AI-Powered Processing**: The Gemini API analyzes the input in real-time.  
+4. **Receive Solutions**: Get narrated answers or step-by-step solutions on-screen.  
 
-If you aren't satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
+---
 
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you're on your own.
+## 🛠️ Installation  
 
-You don't have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn't feel obligated to use this feature. However we understand that this tool wouldn't be useful if you couldn't customize it when you are ready for it.
-
-## Learn More
-
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
-
-To learn React, check out the [React documentation](https://reactjs.org/).
-
-### Code Splitting
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/code-splitting](https://facebook.github.io/create-react-app/docs/code-splitting)
-
-### Analyzing the Bundle Size
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size](https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size)
-
-### Making a Progressive Web App
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app](https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app)
-
-### Advanced Configuration
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/advanced-configuration](https://facebook.github.io/create-react-app/docs/advanced-configuration)
-
-### Deployment
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/deployment](https://facebook.github.io/create-react-app/docs/deployment)
-
-### `npm run build` fails to minify
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
+1. Clone the repository:  
+   ```bash  
+   git clone https://github.com/tellmerahul/visual-learning-assistant.git  
+   cd visual-learning-assistant  
