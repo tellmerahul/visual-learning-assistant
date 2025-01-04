@@ -14,28 +14,33 @@ export async function analyzeImage(imageData) {
       const base64Data = imageData.split(',')[1];
       
       const prompt = `Analyze this image:
-      If math problem: Provide step-by-step solution
-      If science question: Explain concept and answer
-      If language/text: Provide clear explanation
-      If general object: Describe key features and purpose
-      Format response with clear headers and steps`;
+      For Math: 
+      - Show step-by-step solution
+      - Explain each step clearly
+      - Include final answer with verification
+      
+      For Science:
+      - Define key concepts
+      - Explain underlying principles
+      - Provide detailed solution
+      
+      For Text/Language:
+      - Summarize main points
+      - Explain context and meaning
+      - Answer any questions posed
+      
+      For Objects:
+      - Describe key features
+      - Explain purpose/function
+      - Highlight important details`;
   
       const result = await model.generateContent({
         contents: [{
-          parts: [
-            { text: prompt },
-            {
-              inline_data: {
-                mime_type: "image/jpeg",
-                data: base64Data
-              }
-            }
-          ]
+          parts: [{ text: prompt }, { inline_data: { mime_type: "image/jpeg", data: base64Data }}]
         }]
       });
   
-      const response = await result.response;
-      return response.text();
+      return (await result.response).text();
     } catch (error) {
       console.error("Error analyzing image:", error);
       throw error;
