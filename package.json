@@ -7,6 +7,7 @@
     "ajv": "^8.17.1",
     "autoprefixer": "^10.4.20",
     "cra-template": "1.2.0",
+    "framer-motion": "^12.9.7",
     "lucide-react": "^0.469.0",
     "postcss": "^8.4.49",
     "react": "^19.0.0",

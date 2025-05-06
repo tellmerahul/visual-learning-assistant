@@ -13,26 +13,7 @@ export async function analyzeImage(imageData) {
       const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
       const base64Data = imageData.split(',')[1];
       
-      const prompt = `Analyze this image:
-      For Math: 
-      - Show step-by-step solution
-      - Explain each step clearly
-      - Include final answer with verification
-      
-      For Science:
-      - Define key concepts
-      - Explain underlying principles
-      - Provide detailed solution
-      
-      For Text/Language:
-      - Summarize main points
-      - Explain context and meaning
-      - Answer any questions posed
-      
-      For Objects:
-      - Describe key features
-      - Explain purpose/function
-      - Highlight important details`;
+      const prompt = `Analyze this image and identify what it primarily contains.\n\nReply in the following format:\nType: <question/person/object/other>\nExplanation: <detailed explanation>\n\nFor Math/Science Questions:\n- Show step-by-step solution\n- Explain each step clearly\n- Include final answer with verification\n\nFor Text/Language:\n- Summarize main points\n- Explain context and meaning\n- Answer any questions posed\n\nFor Objects/People:\n- Describe key features\n- Explain purpose/function or identity\n- Highlight important details`;
   
       const result = await model.generateContent({
         contents: [{
@@ -40,13 +21,20 @@ export async function analyzeImage(imageData) {
         }]
       });
   
-      return (await result.response).text();
+      const responseText = (await result.response).text();
+      // Parse the response for Type and Explanation
+      const typeMatch = responseText.match(/Type:\s*(.*)/i);
+      const explanationMatch = responseText.match(/Explanation:\s*([\s\S]*)/i);
+      const type = typeMatch ? typeMatch[1].trim().split(/\n|\r/)[0] : 'Unknown';
+      const explanation = explanationMatch ? explanationMatch[1].trim() : responseText;
+      return { type, result: explanation };
     } catch (error) {
       console.error("Error analyzing image:", error);
       throw error;
     }
   }
-export const captureAndProcess = async (videoRef, canvasRef, setIsProcessing, setError, setResult) => {
+
+export const captureAndProcess = async (videoRef, canvasRef, setIsProcessing, setError, setResult, setType) => {
   if (!videoRef.current) return;
 
   setIsProcessing(true);
@@ -69,11 +57,12 @@ export const captureAndProcess = async (videoRef, canvasRef, setIsProcessing, se
 
     const imageData = canvasRef.current.toDataURL('image/jpeg');
     
-    const analysisResult = await analyzeImage(imageData);
-    setResult(analysisResult);
+    const analysis = await analyzeImage(imageData);
+    setResult(analysis.result);
+    if (setType) setType(analysis.type);
     
     // Speak the result
-    speakText(analysisResult);
+    speakText(analysis.result);
 
   } catch (err) {
     setError('Processing error: ' + err.message);
