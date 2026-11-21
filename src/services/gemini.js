@@ -1,92 +1,134 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import { getApiBase, getGeminiApiKey, isGeminiProxyEnabled } from '../config/env';
+import { buildAnalysisPrompt, buildFollowUpPrompt } from '../constants/geminiPrompt';
+import { DEFAULT_SUBJECT_MODE } from '../constants/subjectModes';
 
-console.log("API Key from env:", process.env.REACT_APP_GEMINI_API_KEY);
-const genAI = new GoogleGenerativeAI(process.env.REACT_APP_GEMINI_API_KEY);
+const MODEL_ID = 'gemini-1.5-flash';
+const MIN_REQUEST_GAP_MS = 2000;
+let lastRequestAt = 0;
 
-export const speakText = (text) => {
-  const utterance = new SpeechSynthesisUtterance(text);
-  window.speechSynthesis.speak(utterance);
-};
+function getModel() {
+  const key = getGeminiApiKey();
+  return new GoogleGenerativeAI(key).getGenerativeModel({ model: MODEL_ID });
+}
 
-export async function analyzeImage(imageData) {
-    try {
-      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-      const base64Data = imageData.split(',')[1];
-      
-      const prompt = `Analyze this image and identify what it primarily contains.\n\nReply in the following format:\nType: <question/person/object/other>\nExplanation: <detailed explanation>\n\nFor Math/Science Questions:\n- Show step-by-step solution\n- Explain each step clearly\n- Include final answer with verification\n\nFor Text/Language:\n- Summarize main points\n- Explain context and meaning\n- Answer any questions posed\n\nFor Objects/People:\n- Describe key features\n- Explain purpose/function or identity\n- Highlight important details`;
-  
-      const result = await model.generateContent({
-        contents: [{
-          parts: [{ text: prompt }, { inline_data: { mime_type: "image/jpeg", data: base64Data }}]
-        }]
-      });
-  
-      const responseText = (await result.response).text();
-      // Parse the response for Type and Explanation
-      const typeMatch = responseText.match(/Type:\s*(.*)/i);
-      const explanationMatch = responseText.match(/Explanation:\s*([\s\S]*)/i);
-      const type = typeMatch ? typeMatch[1].trim().split(/\n|\r/)[0] : 'Unknown';
-      const explanation = explanationMatch ? explanationMatch[1].trim() : responseText;
-      return { type, result: explanation };
-    } catch (error) {
-      console.error("Error analyzing image:", error);
-      throw error;
-    }
+export function parseAnalysisResponse(responseText) {
+  const typeMatch = responseText.match(/Type:\s*(.*)/i);
+  const explanationMatch = responseText.match(/Explanation:\s*([\s\S]*)/i);
+  const type = typeMatch ? typeMatch[1].trim().split(/\n|\r/)[0] : 'Unknown';
+  const explanation = explanationMatch ? explanationMatch[1].trim() : responseText;
+  return { type, result: explanation };
+}
+
+async function throttleRequests() {
+  const elapsed = Date.now() - lastRequestAt;
+  if (elapsed < MIN_REQUEST_GAP_MS) {
+    await new Promise((r) => setTimeout(r, MIN_REQUEST_GAP_MS - elapsed));
   }
+  lastRequestAt = Date.now();
+}
 
-export const captureAndProcess = async (videoRef, canvasRef, setIsProcessing, setError, setResult, setType) => {
-  if (!videoRef.current) return;
+async function postJson(path, body) {
+  const base = getApiBase();
+  const url = `${base}${path}`;
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
 
-  setIsProcessing(true);
-  setError('');
-  
-  // Stop any ongoing speech
-  window.speechSynthesis.cancel();
-
-  try {
-    if (!canvasRef.current) {
-      canvasRef.current = document.createElement('canvas');
-    }
-
-    const video = videoRef.current;
-    canvasRef.current.width = video.videoWidth;
-    canvasRef.current.height = video.videoHeight;
-
-    const ctx = canvasRef.current.getContext('2d');
-    ctx.drawImage(video, 0, 0);
-
-    const imageData = canvasRef.current.toDataURL('image/jpeg');
-    
-    const analysis = await analyzeImage(imageData);
-    setResult(analysis.result);
-    if (setType) setType(analysis.type);
-    
-    // Speak the result
-    speakText(analysis.result);
-
-  } catch (err) {
-    setError('Processing error: ' + err.message);
-  } finally {
-    setIsProcessing(false);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(data.error || `Request failed (${res.status})`);
   }
-};
+  return data;
+}
 
-export async function testGemini() {
-  const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-  const prompt = "Write a short poem about coding.";
+async function analyzeViaProxy(imageData, subjectMode, learnerContext) {
+  const data = await postJson('/api/analyze', { imageData, subjectMode, learnerContext });
+  return { type: data.type, result: data.result };
+}
 
-  try {
-    const result = await model.generateContent({
-      contents: [{
+async function followUpViaProxy(imageData, messages, question, subjectMode, learnerContext) {
+  const data = await postJson('/api/chat', {
+    imageData,
+    messages,
+    question,
+    subjectMode,
+    learnerContext,
+  });
+  return data.text;
+}
+
+async function analyzeViaClient(imageData, subjectMode, learnerContext) {
+  const model = getModel();
+  const base64Data = imageData.split(',')[1];
+  const prompt = buildAnalysisPrompt(subjectMode, learnerContext);
+
+  const result = await model.generateContent({
+    contents: [
+      {
         parts: [
-          { text: prompt }
-        ]
-      }]
+          { text: prompt },
+          { inline_data: { mime_type: 'image/jpeg', data: base64Data } },
+        ],
+      },
+    ],
+  });
+
+  const responseText = (await result.response).text();
+  return parseAnalysisResponse(responseText);
+}
+
+async function followUpViaClient(imageData, messages, question, subjectMode, learnerContext) {
+  const model = getModel();
+  const base64Data = imageData.split(',')[1];
+  const initialPrompt = buildAnalysisPrompt(subjectMode, learnerContext);
+
+  const contents = [
+    {
+      role: 'user',
+      parts: [
+        { text: initialPrompt },
+        { inline_data: { mime_type: 'image/jpeg', data: base64Data } },
+      ],
+    },
+  ];
+
+  messages.forEach((msg) => {
+    contents.push({
+      role: msg.role === 'assistant' ? 'model' : 'user',
+      parts: [{ text: msg.content }],
     });
-    const response = await result.response;
-    return response.text();
-  } catch (error) {
-    console.error("Error testing Gemini:", error);
-    throw error;
+  });
+
+  contents.push({
+    role: 'user',
+    parts: [{ text: buildFollowUpPrompt(question, learnerContext) }],
+  });
+
+  const result = await model.generateContent({ contents });
+  return (await result.response).text();
+}
+
+export async function analyzeImage(imageData, subjectMode = DEFAULT_SUBJECT_MODE, learnerContext = '') {
+  await throttleRequests();
+  if (isGeminiProxyEnabled()) {
+    return analyzeViaProxy(imageData, subjectMode, learnerContext);
   }
+  return analyzeViaClient(imageData, subjectMode, learnerContext);
+}
+
+export async function sendFollowUp(
+  imageData,
+  messages,
+  question,
+  subjectMode = DEFAULT_SUBJECT_MODE,
+  learnerContext = ''
+) {
+  await throttleRequests();
+  if (isGeminiProxyEnabled()) {
+    return followUpViaProxy(imageData, messages, question, subjectMode, learnerContext);
+  }
+  return followUpViaClient(imageData, messages, question, subjectMode, learnerContext);
 }
