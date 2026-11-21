@@ -1,3 +1,236 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-paper text-ink antialiased font-sans;
+  }
+}
+
+@layer components {
+  .vla-grid-bg {
+    background-color: #f6f4ef;
+    background-image:
+      linear-gradient(rgba(26, 26, 26, 0.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(26, 26, 26, 0.04) 1px, transparent 1px);
+    background-size: 32px 32px;
+    background-position: -1px -1px;
+  }
+
+  .vla-panel {
+    @apply rounded-lg border border-ink/10 bg-white;
+    box-shadow: 0 1px 0 rgba(26, 26, 26, 0.04);
+  }
+
+  .vla-panel-interactive {
+    @apply vla-panel transition-colors duration-150;
+  }
+
+  .vla-panel-interactive:hover {
+    @apply border-ink/15;
+    box-shadow:
+      0 0 0 1px rgba(13, 110, 110, 0.08),
+      0 4px 24px -12px rgba(26, 26, 26, 0.12);
+  }
+
+  .vla-title {
+    font-family: 'Source Serif 4', Georgia, serif;
+    @apply text-ink font-semibold tracking-tight;
+  }
+
+  .vla-btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-md px-3.5 py-2 text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-teal focus-visible:ring-offset-2 focus-visible:ring-offset-paper disabled:opacity-40 disabled:pointer-events-none;
+  }
+
+  .vla-btn-primary {
+    @apply vla-btn bg-teal text-white hover:bg-teal-dark;
+  }
+
+  .vla-btn-secondary {
+    @apply vla-btn border border-ink/15 bg-white text-ink hover:bg-paper hover:border-ink/25;
+  }
+
+  .vla-btn-danger {
+    @apply vla-btn bg-ink text-white hover:bg-ink/90;
+  }
+
+  .vla-kbd {
+    @apply inline-block rounded border border-ink/15 bg-paper px-1.5 py-0.5 text-[10px] font-medium text-ink/70;
+  }
+
+  .vla-explain {
+    @apply rounded-lg border border-white/[0.08] bg-[#0a0a0a] text-neutral-200;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  }
+
+  .vla-explain-body {
+    @apply rounded-md border border-white/[0.08] text-neutral-100;
+    background: #000000;
+  }
+
+  .vla-explain-muted {
+    @apply text-neutral-500;
+  }
+
+  .vla-explain-accent {
+    @apply text-[#7dcea0];
+  }
+
+  .vla-btn-dark {
+    @apply inline-flex items-center justify-center gap-2 rounded-md border border-white/10 bg-white/5 px-2 py-1 text-xs font-medium text-neutral-200 transition-colors hover:bg-white/10 hover:border-white/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/30 disabled:opacity-30;
+  }
+
+  .vla-btn-dark-primary {
+    @apply vla-btn-dark border-teal/40 bg-teal/20 text-[#b8e6d0] hover:bg-teal/30;
+  }
+
+  .vla-explain-body-processing {
+    @apply relative overflow-hidden;
+  }
+
+  .vla-explain-body-processing::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, rgba(125, 206, 160, 0.55), transparent);
+    animation: vla-scan 1.6s ease-in-out infinite;
+    pointer-events: none;
+  }
+
+  .vla-explain-live {
+    animation: vla-explain-glow 0.6s ease-out;
+  }
+
+  .vla-reveal {
+    animation: vla-reveal 0.5s ease-out both;
+  }
+
+  .vla-reveal-delay-1 {
+    animation-delay: 0.06s;
+  }
+
+  .vla-reveal-delay-2 {
+    animation-delay: 0.12s;
+  }
+
+  .vla-dot {
+    animation: vla-dot 0.9s ease-in-out infinite;
+  }
+
+  .vla-caret {
+    display: inline-block;
+    width: 2px;
+    height: 1em;
+    margin-left: 2px;
+    vertical-align: text-bottom;
+    background: #7dcea0;
+    animation: vla-blink 1s step-end infinite;
+  }
+
+  .vla-btn:active:not(:disabled) {
+    transform: scale(0.98);
+  }
+
+  .vla-chalkboard {
+    @apply rounded-md border border-white/[0.1] px-3 py-2.5;
+    background-color: #141414;
+    background-image:
+      radial-gradient(ellipse 120% 80% at 50% 0%, rgba(125, 206, 160, 0.06), transparent 55%),
+      linear-gradient(180deg, rgba(255, 255, 255, 0.02), transparent);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  }
+
+  .vla-chalkboard-title {
+    @apply text-[10px] font-semibold uppercase tracking-[0.14em] text-[#9ca89c] mb-1.5;
+  }
+
+  .vla-chalkboard-list {
+    @apply list-disc pl-4 space-y-1 text-xs leading-relaxed text-[#d4ddd0];
+    font-family: 'Source Serif 4', Georgia, serif;
+  }
+
+  .vla-chalkboard-list li::marker {
+    color: rgba(125, 206, 160, 0.55);
+  }
+
+  .vla-notes-panel {
+    @apply rounded-md border border-white/[0.1] px-3 pt-3 pb-3;
+    background: #101010;
+  }
+}
+
+@keyframes vla-scan {
+  0% {
+    transform: translateY(0);
+    opacity: 0.3;
+  }
+  50% {
+    transform: translateY(120px);
+    opacity: 0.85;
+  }
+  100% {
+    transform: translateY(240px);
+    opacity: 0.2;
+  }
+}
+
+@keyframes vla-explain-glow {
+  0% {
+    box-shadow: inset 0 0 0 1px rgba(125, 206, 160, 0.35);
+  }
+  100% {
+    box-shadow: inset 0 0 0 0 rgba(125, 206, 160, 0);
+  }
+}
+
+@keyframes vla-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes vla-dot {
+  0%,
+  80%,
+  100% {
+    opacity: 0.35;
+    transform: translateY(0);
+  }
+  40% {
+    opacity: 1;
+    transform: translateY(-3px);
+  }
+}
+
+@keyframes vla-blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vla-reveal,
+  .vla-explain-live,
+  .vla-dot,
+  .vla-caret,
+  .vla-explain-body-processing::after {
+    animation: none !important;
+  }
+
+  .vla-btn:active:not(:disabled) {
+    transform: none;
+  }
+}

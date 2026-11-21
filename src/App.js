@@ -1,354 +1,212 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { Camera, Mic, Volume2, VolumeX } from 'lucide-react';
-import { captureAndProcess, speakText } from './services/gemini';
-import { motion, AnimatePresence } from 'framer-motion';
+import { useCallback, useRef, useState } from 'react';
+import { GridBackground } from './components/GridBackground';
+import { Hero } from './components/Hero';
+import { CameraPanel } from './components/CameraPanel';
+import { DescriptionPanel } from './components/DescriptionPanel';
+import { StudentGuideSection } from './components/StudentGuideSection';
+import { useCamera } from './hooks/useCamera';
+import { useSpeechSynthesis } from './hooks/useSpeechSynthesis';
+import { useVoiceCommands } from './hooks/useVoiceCommands';
+import { DEFAULT_SUBJECT_MODE } from './constants/subjectModes';
+import { analyzeFromDataUrl, captureFrameFromVideo, readFileAsDataUrl } from './services/capture';
+import { sendFollowUp } from './services/gemini';
+import { speakText, stopSpeech } from './services/speech';
+import { formatUserError } from './utils/formatError';
+import { parseStepsFromText } from './utils/parseSteps';
 
-// Animated Bot Avatar Component
-const BotAvatar = () => (
-  <motion.div
-    initial={{ y: -40, opacity: 0 }}
-    animate={{ y: 0, opacity: 1 }}
-    transition={{ type: 'spring', stiffness: 120 }}
-    className="flex items-center justify-center w-20 h-20 rounded-full bg-gradient-to-tr from-blue-400 to-purple-500 shadow-lg mb-2 border-4 border-white"
-  >
-    <span className="text-4xl">🤖</span>
-  </motion.div>
-);
+function App() {
+  const canvasRef = useRef(null);
+  const imageDataRef = useRef(null);
 
-// Animated Processing Indicator
-const ProcessingIndicator = () => (
-  <motion.div
-    className="flex items-center gap-2 w-full p-4 mb-4 bg-blue-100 text-blue-700 rounded justify-center"
-    initial={{ opacity: 0 }}
-    animate={{ opacity: 1 }}
-    exit={{ opacity: 0 }}
-  >
-    <span>Processing your request</span>
-    <motion.span
-      className="flex gap-1 ml-2"
-      aria-label="loading"
-    >
-      {[0, 1, 2].map(i => (
-        <motion.span
-          key={i}
-          className="block w-2 h-2 bg-blue-500 rounded-full"
-          animate={{ y: [0, -6, 0] }}
-          transition={{ repeat: Infinity, duration: 0.8, delay: i * 0.15 }}
-        />
-      ))}
-    </motion.span>
-  </motion.div>
-);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [previewUrl, setPreviewUrl] = useState(null);
+  const [result, setResult] = useState('');
+  const [processError, setProcessError] = useState('');
+  const [currentStep, setCurrentStep] = useState(0);
+  const [steps, setSteps] = useState([]);
+  const [detectedType, setDetectedType] = useState('');
+  const [hasSession, setHasSession] = useState(false);
+  const [subjectMode, setSubjectMode] = useState(DEFAULT_SUBJECT_MODE);
+  const [voiceEnabled, setVoiceEnabled] = useState(false);
+  const [chatMessages, setChatMessages] = useState([]);
+  const [chatBusy, setChatBusy] = useState(false);
 
-// Animated Result Bubble
-const ResultBubble = ({ result }) => (
-  <motion.div
-    className="w-full p-4 bg-green-100 text-green-700 rounded-xl shadow-md whitespace-pre-wrap mt-2"
-    initial={{ y: 30, opacity: 0 }}
-    animate={{ y: 0, opacity: 1 }}
-    exit={{ y: 30, opacity: 0 }}
-    transition={{ type: 'spring', stiffness: 120 }}
-  >
-    {result}
-  </motion.div>
-);
+  const { videoRef, isCapturing, error: cameraError, setError: setCameraError, startCamera, stopCamera } =
+    useCamera();
+  const { isSpeaking, setIsSpeaking, toggleSpeech } = useSpeechSynthesis();
 
-// Typewriter effect for description
-const Typewriter = ({ text }) => {
-  const [displayed, setDisplayed] = useState('');
-  useEffect(() => {
-    setDisplayed('');
-    if (!text) return;
-    let i = 0;
-    const interval = setInterval(() => {
-      setDisplayed(t => t + text[i]);
-      i++;
-      if (i >= text.length) clearInterval(interval);
-    }, 12);
-    return () => clearInterval(interval);
-  }, [text]);
-  return <span>{displayed}</span>;
-};
+  const { supported: voiceSupported, listening: voiceListening, lastHeard } = useVoiceCommands({
+    enabled: voiceEnabled && hasSession,
+    result,
+    steps,
+    currentStep,
+    setSteps,
+    setCurrentStep,
+    onEnterStepMode: () => {},
+  });
 
-const highlightType = (desc, type) => {
-  if (!type || !desc) return desc;
-  const regex = new RegExp(type, 'gi');
-  return desc.split(regex).reduce((acc, part, idx, arr) => {
-    acc.push(part);
-    if (idx < arr.length - 1) {
-      acc.push(<span key={idx} className="font-bold text-blue-600">{type}</span>);
+  const displayError = processError || cameraError;
+
+  const applyAnalysis = useCallback(
+    (analysis, imageData) => {
+      imageDataRef.current = imageData;
+      setResult(analysis.result);
+      setDetectedType(analysis.type);
+      setHasSession(true);
+      setChatMessages([]);
+      const parsed = parseStepsFromText(analysis.result);
+      setSteps(parsed);
+      setCurrentStep(0);
+      setIsSpeaking(true);
+      setPreviewUrl(null);
+    },
+    [setIsSpeaking]
+  );
+
+  const runAnalysis = useCallback(
+    async (imageData) => {
+      setIsProcessing(true);
+      setProcessError('');
+      setCameraError('');
+      stopSpeech();
+
+      try {
+        const analysis = await analyzeFromDataUrl(imageData, subjectMode, { speak: true });
+        applyAnalysis(analysis, imageData);
+      } catch (err) {
+        setProcessError(formatUserError(err));
+      } finally {
+        setIsProcessing(false);
+      }
+    },
+    [applyAnalysis, setCameraError, subjectMode]
+  );
+
+  const handleToggleCamera = () => {
+    if (isCapturing) stopCamera();
+    else startCamera();
+  };
+
+  const handleSnapPreview = () => {
+    try {
+      const dataUrl = captureFrameFromVideo(videoRef.current, canvasRef.current);
+      setPreviewUrl(dataUrl);
+    } catch (err) {
+      setProcessError(formatUserError(err));
     }
-    return acc;
-  }, []);
-};
+  };
 
-const App = () => {
- const [isCapturing, setIsCapturing] = useState(false);
- const [isProcessing, setIsProcessing] = useState(false);
- const [isSpeaking, setIsSpeaking] = useState(false);
- const [result, setResult] = useState('');
- const [error, setError] = useState('');
- const [currentStep, setCurrentStep] = useState(0);
- const [steps, setSteps] = useState([]);
- const [detectedType, setDetectedType] = useState('');
- const [isSplitView, setIsSplitView] = useState(false);
- const descPanelRef = useRef(null);
- 
- const videoRef = useRef(null);
- const canvasRef = useRef(null);
- const recognitionRef = useRef(null);
+  const handleConfirmPreview = () => {
+    if (!previewUrl) return;
+    runAnalysis(previewUrl);
+  };
 
- const handleExplanation = () => {
-   if (result) speakText("Let me explain that in detail: " + result);
- };
+  const handleDiscardPreview = () => setPreviewUrl(null);
 
- const repeatLastResult = () => {
-   if (result) speakText(result);
- };
+  const handleUpload = async (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    try {
+      const dataUrl = await readFileAsDataUrl(file);
+      setPreviewUrl(dataUrl);
+    } catch (err) {
+      setProcessError(formatUserError(err));
+    }
+  };
 
- const showSteps = () => {
-   const steps = result.split('\n');
-   setSteps(steps);
-   speakText("Here are the steps: " + steps.join('. '));
- };
+  const handleFollowUp = async (question) => {
+    const imageData = imageDataRef.current;
+    if (!imageData) return;
 
- const nextStep = () => {
-   if (currentStep < steps.length - 1) {
-     setCurrentStep(prev => prev + 1);
-     speakText(steps[currentStep + 1]);
-   }
- };
+    setChatBusy(true);
+    setProcessError('');
+    const userMsg = { role: 'user', content: question };
+    setChatMessages((prev) => [...prev, userMsg]);
 
- const previousStep = () => {
-   if (currentStep > 0) {
-     setCurrentStep(prev => prev - 1);
-     speakText(steps[currentStep - 1]);
-   }
- };
+    try {
+      const reply = await sendFollowUp(imageData, chatMessages, question, subjectMode);
+      setChatMessages((prev) => [...prev, { role: 'assistant', content: reply }]);
+      setResult((prev) => `${prev}\n\n— Follow-up —\n${reply}`);
+      speakText(reply);
+      setIsSpeaking(true);
+    } catch (err) {
+      setProcessError(formatUserError(err));
+      setChatMessages((prev) => prev.slice(0, -1));
+    } finally {
+      setChatBusy(false);
+    }
+  };
 
- const voiceCommands = {
-   'explain': handleExplanation,
-   'repeat': repeatLastResult,
-   'steps': showSteps,
-   'next': nextStep,
-   'previous': previousStep
- };
+  const handleReset = () => {
+    setHasSession(false);
+    setResult('');
+    setDetectedType('');
+    setProcessError('');
+    setSteps([]);
+    setCurrentStep(0);
+    setChatMessages([]);
+    setPreviewUrl(null);
+    imageDataRef.current = null;
+    stopSpeech();
+  };
 
- const handleVoiceCommand = (transcript) => {
-   const command = transcript.toLowerCase();
-   for (let key in voiceCommands) {
-     if (command.includes(key)) {
-       voiceCommands[key]();
-       return;
-     }
-   }
- };
+  return (
+    <div className="relative min-h-screen flex flex-col">
+      <GridBackground />
+      <Hero compact={hasSession} />
 
- useEffect(() => {
-   if ('webkitSpeechRecognition' in window) {
-     const recognition = new window.webkitSpeechRecognition();
-     recognition.continuous = true;
-     recognition.onresult = (event) => {
-       const transcript = event.results[event.results.length - 1][0].transcript;
-       handleVoiceCommand(transcript);
-     };
-     recognitionRef.current = recognition;
-   }
- }, []);
+      <main className="mx-auto grid w-full max-w-6xl flex-1 gap-5 px-4 pb-10 md:px-6 lg:grid-cols-2 lg:items-start lg:gap-6">
+        <DescriptionPanel
+          detectedType={detectedType}
+          hasSession={hasSession}
+          isProcessing={isProcessing}
+          result={result}
+          error={displayError}
+          steps={steps}
+          currentStep={currentStep}
+          onStepChange={(idx) => {
+            setCurrentStep(idx);
+            if (steps[idx]) speakText(steps[idx]);
+          }}
+          onStepsUpdate={(list, idx) => {
+            setSteps(list);
+            setCurrentStep(idx);
+          }}
+          chatMessages={chatMessages}
+          chatDisabled={chatBusy || isProcessing || !hasSession}
+          onFollowUp={handleFollowUp}
+          onReset={handleReset}
+        />
 
- useEffect(() => {
-   const handleSpeechEnd = () => setIsSpeaking(false);
-   speechSynthesis.addEventListener('end', handleSpeechEnd);
-   return () => speechSynthesis.removeEventListener('end', handleSpeechEnd);
- }, []);
+        <CameraPanel
+          videoRef={videoRef}
+          canvasRef={canvasRef}
+          previewUrl={previewUrl}
+          isCapturing={isCapturing}
+          isProcessing={isProcessing}
+          detectedType={detectedType}
+          hasResult={Boolean(result)}
+          isSpeaking={isSpeaking}
+          subjectMode={subjectMode}
+          voiceSupported={voiceSupported}
+          voiceEnabled={voiceEnabled}
+          voiceListening={voiceListening}
+          lastVoiceHeard={lastHeard}
+          onSubjectModeChange={setSubjectMode}
+          onToggleVoice={() => setVoiceEnabled((v) => !v)}
+          onToggleCamera={handleToggleCamera}
+          onSnapPreview={handleSnapPreview}
+          onConfirmPreview={handleConfirmPreview}
+          onDiscardPreview={handleDiscardPreview}
+          onUpload={handleUpload}
+          onToggleSpeech={() => toggleSpeech(result)}
+        />
+      </main>
 
- const startCamera = async () => {
-   try {
-     const stream = await navigator.mediaDevices.getUserMedia({
-       video: { facingMode: 'environment' }
-     });
-     if (videoRef.current) {
-       videoRef.current.srcObject = stream;
-       setIsCapturing(true);
-     }
-   } catch (err) {
-     setError('Camera access error: ' + err.message);
-   }
- };
-
- const stopCamera = () => {
-   if (videoRef.current?.srcObject) {
-     videoRef.current.srcObject.getTracks().forEach(track => track.stop());
-     setIsCapturing(false);
-   }
- };
-
- const handleQuery = async () => {
-   setIsProcessing(true);
-   try {
-     await captureAndProcess(videoRef, canvasRef, setIsProcessing, setError, setResult, setDetectedType);
-     setIsSpeaking(true);
-     setIsSplitView(true);
-   } catch (err) {
-     setError('Processing error: ' + err.message);
-   }
-   setIsProcessing(false);
- };
-
- const toggleSpeech = () => {
-   if (isSpeaking) {
-     window.speechSynthesis.cancel();
-     setIsSpeaking(false);
-   } else if (result) {
-     speakText(result);
-     setIsSpeaking(true);
-   }
- };
-
- // Auto-scroll description panel to bottom when result changes
- useEffect(() => {
-   if (descPanelRef.current) {
-     descPanelRef.current.scrollTop = descPanelRef.current.scrollHeight;
-   }
- }, [result]);
-
- const handleBackToCenter = () => {
-   setIsSplitView(false);
-   setResult('');
-   setDetectedType('');
- };
-
- return (
-   <div className="min-h-screen flex flex-col md:flex-row bg-neutral-50">
-     {/* Left Panel: Description */}
-     <div className="flex-1 flex items-center justify-center p-4 md:p-8 bg-black">
-       <div className="w-full max-w-lg rounded-3xl shadow-xl border border-blue-100 p-8 flex flex-col h-[520px] backdrop-blur-md bg-white/20 bg-clip-padding" style={{background: 'rgba(30,30,30,0.25)', boxShadow: '0 8px 32px 0 rgba(31, 38, 135, 0.37)', border: '1px solid rgba(255,255,255,0.18)'}}>
-         <div className="flex items-center justify-between mb-2">
-           <h2 className="text-xl font-bold text-blue-200 flex items-center gap-2">
-             <span>Description</span>
-             <span className="text-base text-blue-300">{detectedType && `(${detectedType.charAt(0).toUpperCase() + detectedType.slice(1)})`}</span>
-           </h2>
-           {isSplitView && (
-             <button
-               onClick={handleBackToCenter}
-               className="text-xs px-3 py-1 rounded-full bg-blue-900/60 text-blue-100 font-semibold shadow hover:bg-blue-800/80 transition-colors"
-             >
-               Back to Center
-             </button>
-           )}
-         </div>
-         <div
-           ref={descPanelRef}
-           className="flex-1 overflow-y-auto pr-2 text-blue-50 whitespace-pre-line mb-4"
-           style={{ scrollbarWidth: 'thin' }}
-         >
-           {isProcessing ? (
-             <div className="flex items-center gap-2 text-blue-500 font-semibold mt-8 justify-center">
-               <span>Analyzing</span>
-               <span className="flex gap-1">
-                 <span className="block w-2 h-2 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '0s' }}></span>
-                 <span className="block w-2 h-2 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '0.15s' }}></span>
-                 <span className="block w-2 h-2 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '0.3s' }}></span>
-               </span>
-             </div>
-           ) : (
-             <AnimatePresence>
-               {result && !isProcessing && (
-                 <motion.div
-                   key="desc-content"
-                   initial={{ opacity: 0, y: 20 }}
-                   animate={{ opacity: 1, y: 0 }}
-                   exit={{ opacity: 0, y: 20 }}
-                   transition={{ type: 'spring', stiffness: 120 }}
-                   className="text-base leading-relaxed text-blue-50"
-                 >
-                   <Typewriter text={typeof result === 'string' ? result : ''} />
-                 </motion.div>
-               )}
-             </AnimatePresence>
-           )}
-         </div>
-         {error && (
-           <motion.div
-             className="w-full p-4 mt-4 bg-red-900/80 text-red-200 rounded-xl shadow"
-             initial={{ opacity: 0 }}
-             animate={{ opacity: 1 }}
-             exit={{ opacity: 0 }}
-           >
-             {error}
-           </motion.div>
-         )}
-       </div>
-     </div>
-     {/* Right Panel: Video & Bot & Controls */}
-     <div className="flex-1 flex items-center justify-center p-4 md:p-8 bg-gradient-to-br from-[#f8fafc] via-[#e0e7ff] to-[#fbc2eb]">
-       <div className="w-full max-w-lg bg-white/90 rounded-3xl shadow-xl border border-blue-100 p-8 flex flex-col items-center">
-         <BotAvatar />
-         <h1 className="text-3xl font-extrabold mb-2 text-blue-700 tracking-tight drop-shadow">Visual Learning Assistant</h1>
-         <p className="text-gray-500 mb-6 text-center">
-           Point your camera at any problem for instant help and explanation
-         </p>
-         <div className="relative w-full aspect-video bg-gray-100 rounded-xl overflow-hidden mb-4 border-2 border-blue-200 shadow">
-           <video
-             ref={videoRef}
-             autoPlay
-             playsInline
-             className="w-full h-full object-cover"
-           />
-           {detectedType && !isProcessing && (
-             <motion.div
-               initial={{ opacity: 0, y: -10 }}
-               animate={{ opacity: 1, y: 0 }}
-               exit={{ opacity: 0, y: -10 }}
-               className="absolute top-3 left-3 bg-white/90 text-blue-700 font-bold px-4 py-1 rounded-full shadow border border-blue-300 text-sm z-10 backdrop-blur"
-             >
-               {detectedType.charAt(0).toUpperCase() + detectedType.slice(1)}
-             </motion.div>
-           )}
-         </div>
-         {/* Controls below video */}
-         <div className="flex flex-wrap gap-4 mb-4 justify-center w-full">
-           <motion.button
-             whileTap={{ scale: 0.95 }}
-             whileHover={{ scale: 1.05 }}
-             onClick={isCapturing ? stopCamera : startCamera}
-             className={`flex items-center gap-2 px-4 py-2 rounded-xl shadow transition-colors duration-200 font-semibold text-lg focus:outline-none focus:ring-2 focus:ring-blue-400 ${
-               isCapturing ? 'bg-red-500 hover:bg-red-600' : 'bg-blue-500 hover:bg-blue-600'
-             } text-white`}
-           >
-             <Camera className="w-5 h-5" />
-             {isCapturing ? 'Stop Camera' : 'Start Camera'}
-           </motion.button>
-           {isCapturing && (
-             <motion.button
-               whileTap={{ scale: 0.95 }}
-               whileHover={{ scale: 1.05 }}
-               onClick={handleQuery}
-               disabled={isProcessing}
-               className="flex items-center gap-2 px-4 py-2 rounded-xl shadow bg-green-500 hover:bg-green-600 text-white disabled:bg-gray-400 font-semibold text-lg focus:outline-none focus:ring-2 focus:ring-green-400"
-             >
-               <Mic className="w-5 h-5" />
-               {isProcessing ? 'Processing...' : 'Capture & Analyze'}
-             </motion.button>
-           )}
-           {result && (
-             <motion.button
-               whileTap={{ scale: 0.95 }}
-               whileHover={{ scale: 1.05 }}
-               onClick={toggleSpeech}
-               className={`flex items-center gap-2 px-4 py-2 rounded-xl shadow font-semibold text-lg focus:outline-none focus:ring-2 focus:ring-purple-400 ${
-                 isSpeaking ? 'bg-red-500 hover:bg-red-600' : 'bg-purple-500 hover:bg-purple-600'
-               } text-white`}
-             >
-               {isSpeaking ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
-               {isSpeaking ? 'Stop Speaking' : 'Speak Result'}
-             </motion.button>
-           )}
-         </div>
-       </div>
-     </div>
-   </div>
- );
-};
+      <StudentGuideSection />
+    </div>
+  );
+}
 
 export default App;
