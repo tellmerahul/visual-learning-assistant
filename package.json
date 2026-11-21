@@ -14,7 +14,6 @@
     "react-dom": "^19.0.0",
     "react-scripts": "5.0.1",
     "tailwindcss": "^3.4.17",
-    "tesseract.js": "^5.1.1",
     "web-vitals": "^4.2.4"
   },
   "scripts": {
@@ -28,6 +27,11 @@
       "react-app",
       "react-app/jest"
     ]
+  },
+  "devDependencies": {
+    "@babel/plugin-proposal-private-property-in-object": "^7.21.11",
+    "@testing-library/jest-dom": "^6.6.3",
+    "@testing-library/react": "^16.1.0"
   },
   "browserslist": {
     "production": [
